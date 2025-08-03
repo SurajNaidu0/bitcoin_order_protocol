@@ -34,9 +34,20 @@ pub struct OrderWithdrawInfo {
 }
 
 #[derive(CandidType, Clone)]
+pub struct WithdrawalEvent {
+    pub order_no: u64,
+    pub amount: u64,
+    pub transaction_id: String,
+    pub timestamp: u64,
+    pub order_address: String,
+    pub htlc_address: String,
+}
+
+#[derive(CandidType, Clone)]
 struct OrderStorage {
     orders: HashMap<u64, OrderDetail>,
     next_order_no: u64,
+    withdrawal_events: Vec<WithdrawalEvent>,
 }
 
 impl OrderStorage {
@@ -44,6 +55,7 @@ impl OrderStorage {
         Self {
             orders: HashMap::new(),
             next_order_no: 1,
+            withdrawal_events: Vec::new(),
         }
     }
 }
@@ -367,6 +379,42 @@ pub async fn execute_order_withdraw_to_htlc(order_no: u64, responder_pubkey: Str
     .await
     .map_err(|e| format!("Failed to send transaction: {:?}", e))?;
 
+    let transaction_id = signed_transaction.compute_txid().to_string();
+
+    // Emit withdrawal event
+    let withdrawal_event = WithdrawalEvent {
+        order_no,
+        amount: amount_in_satoshi,
+        transaction_id: transaction_id.clone(),
+        timestamp: ic_cdk::api::time(),
+        order_address: own_address.to_string(),
+        htlc_address: htlc_address.to_string(),
+    };
+
+    // Store the event
+    STORAGE.with(|s| {
+        s.borrow_mut().withdrawal_events.push(withdrawal_event);
+    });
+
     // Return the transaction ID
-    Ok(signed_transaction.compute_txid().to_string())
+    Ok(transaction_id)
+}
+
+/// Returns all withdrawal events
+#[query]
+pub fn get_withdrawal_events() -> Vec<WithdrawalEvent> {
+    STORAGE.with(|s| s.borrow().withdrawal_events.clone())
+}
+
+/// Returns withdrawal events for a specific order
+#[query]
+pub fn get_withdrawal_events_by_order(order_no: u64) -> Vec<WithdrawalEvent> {
+    STORAGE.with(|s| {
+        s.borrow()
+            .withdrawal_events
+            .iter()
+            .filter(|event| event.order_no == order_no)
+            .cloned()
+            .collect()
+    })
 }
