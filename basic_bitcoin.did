@@ -4,6 +4,12 @@ type millisatoshi_per_vbyte = nat64;
 
 type bitcoin_address = text;
 
+type network = variant {
+  regtest;
+  testnet;
+  mainnet;
+};
+
 type outpoint = record {
   txid : blob;
   vout : nat32;
@@ -38,15 +44,6 @@ type order_withdraw_info = record {
   order_details : order_detail;
 };
 
-type withdrawal_event = record {
-  order_no : nat64;
-  amount : nat64;
-  transaction_id : text;
-  timestamp : nat64;
-  order_address : text;
-  htlc_address : text;
-};
-
 service : (network) -> {
   // Basic Bitcoin functionality
   "get_balance" : (address : bitcoin_address) -> (satoshi);
@@ -61,8 +58,4 @@ service : (network) -> {
   "get_order_address" : (order_no: nat64) -> (variant { Ok: text; Err: text });
   "preview_order_withdrawal" : (order_no: nat64, responder_pubkey: text) -> (variant { Ok: order_withdraw_info; Err: text });
   "execute_order_withdraw_to_htlc" : (order_no: nat64, responder_pubkey: text, amount_in_satoshi: nat64) -> (variant { Ok: text; Err: text });
-
-  // Event querying functionality
-  "get_withdrawal_events" : () -> (vec withdrawal_event) query;
-  "get_withdrawal_events_by_order" : (order_no: nat64) -> (vec withdrawal_event) query;
 };
